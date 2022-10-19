@@ -12,6 +12,5 @@ This is just a project that I made for fun...Try it and tell me what can I impro
 
 <h2>Note</h2>
 1. You can download everything present on dramacool websites.<br>
-2. Sometimes u might have to fill the captcha. For easy, I have given buster extension. As soon as captcha page opens try to click the <i>human sign with tick</i> it might solve the captcha automatically. In case it doesn't solve just click on <i>eye</i> and do it manually.<br>
 
 <h3>Enjoy!! 😉</h3>
