@@ -1,4 +1,8 @@
+import math
+import threading
 import time
+
+from selenium.common.exceptions import TimeoutException
 from bs4 import BeautifulSoup as bs4
 import requests as rq
 from selenium.webdriver.support.ui import WebDriverWait
@@ -61,7 +65,8 @@ class Heart:
                 ep_download.append("https://" + str(i).split('\n')[0][11:-18])
         return ep_download
 
-    def download(self, ep_download: list):
+    # noinspection PyShadowingNames,PyBroadException
+    def downloading(self, ep):
         chrome_driver_path = '.\\chromedriver.exe'
         options = Options()
         options.binary_location = self.browser_exe_path
@@ -71,38 +76,67 @@ class Heart:
         options.add_extension('.\\buster.crx')
         options.add_experimental_option('detach', True)
 
-        for link in ep_download:
-            driver = webdriver.Chrome(options=options, service=Service(chrome_driver_path))
-            driver.minimize_window()
-            driver.get(link)
-            if self.check_captcha(driver):
-                driver.maximize_window()
+        driver = webdriver.Chrome(options=options, service=Service(chrome_driver_path))
+        driver.minimize_window()
+        driver.get(ep)
+        if self.check_captcha(driver):
+            driver.maximize_window()
 
-                WebDriverWait(driver, 10000).until(EC.frame_to_be_available_and_switch_to_it(
-                    (By.CSS_SELECTOR, "iframe[name^='a-'][src^='https://www.google.com/recaptcha/api2/anchor?']")))
-                WebDriverWait(driver, 1000).until(
-                    EC.element_to_be_clickable((By.XPATH, "//span[@id='recaptcha-anchor']"))).click()
-                WebDriverWait(driver, 1000).until(
+            WebDriverWait(driver, 100).until(EC.frame_to_be_available_and_switch_to_it(
+                (By.CSS_SELECTOR, "iframe[name^='a-'][src^='https://www.google.com/recaptcha/api2/anchor?']")))
+            WebDriverWait(driver, 100).until(
+                EC.element_to_be_clickable((By.XPATH, "//span[@id='recaptcha-anchor']"))).click()
+            try:
+                WebDriverWait(driver, 5).until(
                     EC.presence_of_element_located(
                         (By.XPATH, "//span[@id='recaptcha-anchor' and @aria-checked='true']")))
-                driver.switch_to.default_content()
-                driver.find_element(By.ID, 'btn-submit').click()
+            except TimeoutException:
+                self.solve_captcha(driver)
+
+            driver.switch_to.default_content()
+            driver.find_element(By.ID, 'btn-submit').click()
+            driver.minimize_window()
+            time.sleep(5)
+
+        for i in range(4, 0, -1):
+            try:
+                btn = driver.find_element(By.XPATH, f'/html/body/section/div/div[2]/div/div[4]/div[1]/div[{i}]')
+            except Exception:
+                pass
+            else:
+                btn.click()
                 driver.minimize_window()
-                time.sleep(5)
-            for i in range(4, 0, -1):
-                try:
-                    btn = driver.find_element(By.XPATH, f'/html/body/section/div/div[2]/div/div[4]/div[1]/div[{i}]')
-                except Exception:
-                    pass
-                else:
-                    btn.click()
-                    driver.minimize_window()
-                    break
+                break
 
-            time.sleep(1)
-            driver.quit()
-
+        time.sleep(1)
+        driver.quit()
         return
+
+    # noinspection PyBroadException
+    def solve_captcha(self, driver):
+        driver.switch_to.default_content()
+        WebDriverWait(driver, 50).until(EC.frame_to_be_available_and_switch_to_it(
+            (By.CSS_SELECTOR, "iframe[name^='c-'][src^='https://www.google.com/recaptcha/api2/bframe?']")))
+
+        WebDriverWait(driver, 10).until(
+            EC.element_to_be_clickable((By.CSS_SELECTOR, '.help-button-holder'))).click()
+        time.sleep(3)
+
+        driver.switch_to.default_content()
+        try:
+            WebDriverWait(driver, 5).until(EC.frame_to_be_available_and_switch_to_it(
+                (By.CSS_SELECTOR, "iframe[name^='a-'][src^='https://www.google.com/recaptcha/api2/anchor?']")))
+            WebDriverWait(driver, 4).until(EC.presence_of_element_located(
+                (By.XPATH, "//span[@id='recaptcha-anchor' and @aria-checked='true']")))
+            return
+        except Exception:
+            driver.switch_to.default_content()
+            WebDriverWait(driver, 50).until(EC.frame_to_be_available_and_switch_to_it(
+                (By.CSS_SELECTOR, "iframe[name^='c-'][src^='https://www.google.com/recaptcha/api2/bframe?']")))
+            WebDriverWait(driver, 10).until(
+                EC.element_to_be_clickable((By.CSS_SELECTOR, '.image-button-holder'))).click()
+            time.sleep(2)
+            self.solve_captcha(driver)
 
     def check_captcha(self, driver):
         """Returns true if captcha found on page"""
@@ -114,3 +148,31 @@ class Heart:
             return False
         else:
             return True
+
+
+def partition(ls: list):
+    x = math.ceil(len(ls) / 6) if 6 < len(ls) else 1
+    n = 0
+    ls_for_challenge = []
+    for i in range(x):
+        if n + 6 > len(ls):
+            ls_for_challenge.append(ls[n:len(ls)])
+        else:
+            ls_for_challenge.append(ls[n:n + 6])
+            n += 6
+
+    return ls_for_challenge
+
+
+def handle_download(download_links: list, func):
+    thread_list, ls = [], []
+    for a in partition(download_links):
+        for link in a:
+            t = threading.Thread(target=func, kwargs={'ep': link})
+            t.start()
+            time.sleep(1)
+            thread_list.append(t)
+        # Wait for all threads to complete
+        for thread in thread_list:
+            thread.join()
+    return

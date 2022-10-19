@@ -1,9 +1,9 @@
-import os
 import webbrowser
 from flask import Flask, render_template, redirect, url_for, request
 from flask_bootstrap import Bootstrap
 from forms import Find, Epi
-from heart import Heart
+from heart import Heart, handle_download
+import os
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = os.environ['secret_key']  # secret_key in environmental variables
@@ -37,7 +37,7 @@ def select_episodes():
     data = heart.get_all_ep_pg(movie_url)
     if len(data) == 1:
         download_links = heart.get_ep_download_links(data)
-        heart.download(download_links)
+        handle_download(download_links, heart.downloading)
         return redirect(url_for('home'))
 
     elif request.method == 'POST':
@@ -48,7 +48,7 @@ def select_episodes():
         else:
             ep_numbers = [int(i) - 1 for i in ep.split(',')]
         download_links = heart.get_ep_download_links([data[i] for i in ep_numbers])
-        heart.download(download_links)
+        handle_download(download_links, heart.downloading)
         return redirect(url_for('home'))
 
     return render_template('episodes.html', form=form, data=data, name=movie_name, img=movie_img)
